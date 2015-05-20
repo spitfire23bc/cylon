@@ -26,7 +26,7 @@ static int ltr = 1;
 
 int main(void) {
 
-	powerup_2();
+	powerup_3();
 	
 	
 	// Main loop
@@ -46,6 +46,45 @@ int main(void) {
 
 /*===========================================================================*/
 
+// Third attempt at a powerup routine with a logarithmic step change.
+// Doesn't work yet.
+int powerup_3(void) {
+
+	// Initialise PortD as output
+	DDRD = 0xFF;
+	
+	// Set to no prescaling
+	TCCR1B |= (1 << CS10);
+	
+	// Duty cycle is approximately 60Hz
+	// Begin with LED lit for 0 ticks
+	int duty = 16000;
+	int on = 0;
+	int i = 0;
+	int step[10] = {0, 4816, 7634, 9633, 11184, 12450, 13522, 14449, 15268, 16000};
+		
+	// PWM loop until we are at full brightness
+	while (on<duty) {
+
+		if (TCNT1 < on) 			// When count is within the "on" time
+		{
+			PORTD |= 0x08;			// Light the LED
+		}
+		else if (TCNT1 < duty) 		// When count is outside the "on" time
+		{		
+			PORTD &= !0x08;			// Dim the LED
+		}
+		else						// When the count has reached the duty cycle limit
+		{
+			TCNT1 = 0;				// Reset the counter
+			i++;
+			on = step[i];
+		}
+	}
+
+}
+/*===========================================================================*/
+
 // Second attempt at a powerup routine. This one uses an inelegant PWM to
 // gradually increase the perceived brightness of a single LED before main()
 // calls larson() to begin scanning.
@@ -62,7 +101,7 @@ int powerup_2(void) {
 	// Step size of 50 ticks	TODO - implement logarithmic step?
 	int duty = 16000;
 	int on = 0;
-	int step = 50;
+	int step = 10;
 	
 	// PWM loop until we are at full brightness
 	while (on<=duty) {
