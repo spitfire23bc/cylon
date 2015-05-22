@@ -41,106 +41,85 @@ const uint16_t log_step[32] = {
 static int ltr = 1;			
 
 volatile uint8_t led;
-
+volatile uint8_t i = 0;
+uint8_t j = 0;
 /*===========================================================================*/
 
 
 int main(void) {
 
+	// Enable gloabl interrupts
 	sei();
-	TIMSK = (1 << OCIE1A) | (1 << OCIE1B);
+	
+	// Enable timer0 interrupts
+	//		  compare A   |	  compare B   |	  overflow
+	TIMSK = (1 << OCIE0A) | (1 << OCIE0B) | (1 << TOIE0);
+	
+	/*-----------------------------------------------------------------------*/
 
 	// Initialise PortD as output
 	DDRD = 0xFF;
-
-
-	//powerup();
-	
 	led = 0x08;
-	led_control();
+	//PORTD = led;
+	/*-----------------------------------------------------------------------*/
+
+	// Setup timer0
+	//	            64x prescale
+	TCCR0B |= (1 << CS01) | (1 << CS00);
+	
+
+	/*-----------------------------------------------------------------------*/
+
 	// Main loop
 	while(1) {
 		
+	}	
+		
+}
 
-		// Delay between LED changes
-		// TODO - implement the delay with interrupts
-		_delay_ms(100);
-		
-		
-		PORTD = led;
-		
+/*===========================================================================*/
+
+// timer0 PWM on for all three LEDs on overflow
+ISR(TIMER0_OVF_vect) {
+
+	
+
+	if (OCR0B<241) {
+		OCR0A++;
+		OCR0B = OCR0B + 15;
+	}
+	else {
+		// Enable timer0 interrupts
+		//		  compare A   |	  compare B   |	  overflow
+		TIMSK = (1 << OCIE0A) | (0 << OCIE0B) | (1 << TOIE0);
+		i++;
+	}
+
+
+	if (i>=5) {
 		// Update the PORTD register to shift the lit LED
 		larson();
+		//PORTD = led;
+		i=0;
+	}
+	PORTD |= (led<<1) | led | (led>>1);		// LEDs on
 
-		
-	}	
-	
-		
 }
-
 
 /*===========================================================================*/
-int led_control(void) {
-	
-	// Set to no prescaling
-	TCCR1B |= (1 << CS10);
-	TCCR1B |= (1 << WGM12); // Configure timer 1 for CTC mode
-	OCR1A = 16000;
-	OCR1B = 14000;
-	
-	return 1;
-	
+
+// timer0 PWM off for outer LEDs
+ISR(TIMER0_COMPA_vect) {
+
+	PORTD &= ~((led<<1) | (led>>1));		// Outer LEDs off
 }
 
-
-ISR(TIMER1_COMPA_vect)
-{
-	PORTD &= ~((led<<1) | (led>>1));		// LEDs off
-	PORTD |= led;
-}
-
-ISR(TIMER1_COMPB_vect)
-{
-	PORTD |= (led<<1) | (led>>1);		// LEDs on
-	PORTD |= led;
-}
 /*===========================================================================*/
 
-// Powerup routine with a logarithmic step change.
-// Each loop runs until timer count == 1/duty seconds (ie each loop takes 1/60s)
-// Thus, for 256 steps, the loop takes approx 4.27s to reach peak brightness.
-int powerup(void) {
-	
-	// Set to no prescaling
-	TCCR1B |= (1 << CS10);
-	
-	// Begin with LED lit for 0 ticks
-	int i = 0;
-	int j = 0;
+// timer0 PWM off for inner LED (disabled after startup)
+ISR(TIMER0_COMPB_vect) {
 
-	// PWM loop until we are at full brightness
-	while (i<num_steps) {
-		
-		if (TCNT1 < log_step[i]) {		// When timer count is within the "on" time
-			PORTD |= 0x08;				// Light the LED
-		}
-		else if (TCNT1 < duty) {		// When timer count is outside the "on" time
-			PORTD &= ~0x08;				// Dim the LED
-		}
-		else {							// When the count has reached the duty cycle limit
-			TCNT1 = 0;					// Reset the timer count
-			j++;
-			if (j>=5) {
-				i++;					// Move to next PWM width
-				j=0;
-			}						
-		}	
-	} 
-	
-	_delay_ms(2000);					// TODO - interrupt here
-										// TODO - sort out flicker here
-	
-	return 1;
+	PORTD &= ~led;						// Mid LED off
 }
 
 /*===========================================================================*/
