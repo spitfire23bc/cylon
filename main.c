@@ -35,6 +35,10 @@
 #include <avr/interrupt.h>
 
 /*===========================================================================*/
+// Type defs
+typedef enum { false, true } bool;
+
+/*===========================================================================*/
 // Prototypes
 int main(void);
 int larson(void);
@@ -57,7 +61,7 @@ const uint8_t con_wep_bitsB = 0x40;
 // Global signals
 
 // Begin left-to-right
-static int scan_ltr = 1;			
+static bool scan_ltr = true;			
 
 // Current lit LED - intialised to the middle LED
 static uint8_t scan_led = con_scan_LED_mid;
@@ -159,12 +163,12 @@ ISR(TIMER0_COMPB_vect) {
 // con_scan_LED_first and con_scan_LED_last
 int larson(void) {
 
-	if (scan_ltr==1) {							// Scan left to right
+	if (scan_ltr==true) {						// Scan left to right
 		if (scan_led < con_scan_LED_last) {
 			scan_led = (scan_led << 1);			// Left-shift to light next LED
 		}
 		else {				 					// Right-most position		
-			scan_ltr = 0;						// Set the direction to right-to-left
+			scan_ltr = false;					// Set the direction to right-to-left
 		}
 	}
 	else {										// Scan right to left 
@@ -172,7 +176,7 @@ int larson(void) {
 			scan_led = (scan_led >> 1);			// Right-shift to light next LED
 		}
 		else {									// Left-most position
-			scan_ltr = 1;						// Set the direction to left-to-right
+			scan_ltr = true;					// Set the direction to left-to-right
 		}
 	}
 
