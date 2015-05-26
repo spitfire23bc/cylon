@@ -20,7 +20,7 @@
  *      scan LED5   8 --|      |-- 13  scan LED9
  *      scan LED6   9 --|      |-- 12  scan LED8
  *             0V  10 --|      |-- 11  scan LED7
- * 	        	    	 ------
+ *                       ------
  *
  *	TODO - increase LED count to 11(?) on breadboard - use PORTB
  *	TODO - add flickering thrusters
