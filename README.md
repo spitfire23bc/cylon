@@ -1,11 +1,7 @@
 # cylon
 ATTiny4313 3LED Larson scanner code for use in a model Cylon Raider.
-
-Initial fade-in and scan brightness are performed with software PWM using 
-timer0 interrupts:
-	overflow - all three LEDs lit
-	compareA - dim outer LEDs
-	compareB - dim mid LED (this interrupt is disabled afer the initial fade-in)
+The design uses 11 LEDs in the scanner, along with 2 thrusters and 2 weapons bay LEDs, 
+but is scalable to any number of LEDs.
 
                        ------
                   1 --|      |-- 20  +5v
