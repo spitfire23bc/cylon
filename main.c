@@ -11,8 +11,8 @@
  *
  *                       ------
  *                  1 --|      |-- 20  +5v
- *      scan LED1   2 --|      |-- 19
- *      scan LED2   3 --|      |-- 18  wep LEDs
+ *      scan LED1   2 --|      |-- 19  wep LEDs
+ *      scan LED2   3 --|      |-- 18  
  *                  4 --|      |-- 17  thr LED2
  *                  5 --|      |-- 16  thr LED1
  *      scan LED3   6 --|      |-- 15  scan LED11
@@ -47,15 +47,15 @@ int larson(void);
 // Constants
 
 // Number of LEDs = 11
-const uint8_t con_scan_LED_first = (1 << 0);
-const uint8_t con_scan_LED_mid = (1 << 5);
-const uint8_t con_scan_LED_last = (1 << 10);
+const uint16_t con_scan_LED_first = (1 << 0);
+const uint16_t con_scan_LED_mid = (1 << 5);
+const uint16_t con_scan_LED_last = (1 << 10);
 
 // Constants to define which port bits to set
 const uint8_t con_scan_bitsD = 0x7F;
 const uint8_t con_scan_bitsB = 0x0F;
 const uint8_t con_thr_bitsB = 0x30;
-const uint8_t con_wep_bitsB = 0x40;
+const uint8_t con_wep_bitsB = 0x80;
 
 /*===========================================================================*/
 // Global signals
@@ -64,11 +64,12 @@ const uint8_t con_wep_bitsB = 0x40;
 static bool scan_ltr = true;			
 
 // Current lit LED - intialised to the middle LED
-static uint8_t scan_led = con_scan_LED_mid;
+static uint16_t scan_led = 0x00;
 
 // Strings to contain scanner and thruster LED on/off commands
 volatile uint16_t scan_string = 0x0000;
-volatile uint8_t thr_string = 0x00;
+volatile uint8_t thr_string = 0x03;
+uint8_t portb_string = 0x00;
 
 // Counter
 volatile uint8_t i = 0;
@@ -90,7 +91,7 @@ int main(void) {
 	// Initialise PORTB and PORTD as outputs
 	DDRB = 0xFF;
 	DDRD = 0xFF;
-	
+	scan_led = con_scan_LED_mid;
 	/*-----------------------------------------------------------------------*/
 
 	// Setup timer0 to overflow at approx 60Hz (8bit timer / 64 = 16320 ticks)
@@ -106,9 +107,12 @@ int main(void) {
 		// Update the output port(s) to light the LEDs as demanded
 		PORTD = scan_string & con_scan_bitsD;			// 7 eye LEDs (scan_string bits 0..6)
 		
-		PORTB = (scan_string >> 7) & con_scan_bitsB;	// 4 eye LEDs (scan_string bits 7..10)
-		PORTB |= (thr_string << 4) & con_thr_bitsB;		// 2 thruster LEDs (thr_string bits 0..1)
-		PORTB |= con_wep_bitsB;							// Weapons bay LEDs at constant brightness
+		portb_string = ((scan_string >> 7) & con_scan_bitsB);	// 4 eye LEDs (scan_string bits 7..10)
+		portb_string |= ((thr_string << 4) & con_thr_bitsB);	// 2 thruster LEDs (thr_string bits 0..1)
+		portb_string |= con_wep_bitsB;							// Weapons bay LEDs at constant brightness
+	
+		PORTB = portb_string;
+
 	}	
 	
 	return 1;
