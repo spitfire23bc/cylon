@@ -1,70 +1,96 @@
 /*
  * main.c
  *
- *	TODO - figure out PWM
- *	TODO - increase larson LED count to 11(?). Charlieplexing.
- *	TODO - add code for flickering thrusters
- *	TODO - add code for static missile bay lights (may as well drive off the 4313)
+ *	ATTiny4313 3LED Larson scanner code for use in a model Cylon Raider.
+ *	
+ *	Initial fade-in and scan brightness are performed with software PWM using 
+ *	timer0 interrupts:
+ *		overflow - all three LEDs lit
+ *		compareA - dim outer LEDs
+ *		compareB - dim mid LED (this interrupt is disabled afer the initial fade-in)
+ *
+ *                       ------
+ *                  1 --|      |-- 20  +5v
+ *      scan LED1   2 --|      |-- 19
+ *      scan LED2   3 --|      |-- 18  wep LEDs
+ *                  4 --|      |-- 17  thr LED2
+ *                  5 --|      |-- 16  thr LED1
+ *      scan LED3   6 --|      |-- 15  scan LED11
+ *      scan LED4   7 --|      |-- 14  scan LED10
+ *      scan LED5   8 --|      |-- 13  scan LED9
+ *      scan LED6   9 --|      |-- 12  scan LED8
+ *             0V  10 --|      |-- 11  scan LED7
+ * 	        	    	 ------
+ *
+ *	TODO - increase LED count to 11(?) on breadboard - use PORTB
+ *	TODO - add flickering thrusters
+ *	TODO - add static weapons bay LEDs to breadboard
+ *	TODO - tidy up interrupt code and fade-in
  *
  */
 /*===========================================================================*/
-
+// Libararies and defs
 #define F_CPU 1000000UL
 #include <avr/io.h>
 #include <avr/interrupt.h>
-#include <util/delay.h>		// TODO - remove this once delays are done with interrupts
-
 
 /*===========================================================================*/
-
-int powerup(void);
+// Prototypes
+int main(void);
 int larson(void);
-int led_control(void);
 
 /*===========================================================================*/
+// Constants
 
-// Roughly 60Hz duty cycle
-const int duty = 16000;
+// Number of LEDs = 11
+const uint8_t con_scan_LED_first = (1 << 0);
+const uint8_t con_scan_LED_mid = (1 << 5);
+const uint8_t con_scan_LED_last = (1 << 10);
 
-// Create 128 step log look-up table for PWM stages
-// log_step[i] = duty*[1-log(i,num_steps+1)]
-const int num_steps = 32;
-const uint16_t log_step[32] = {	
-	0, 147, 298, 454, 616, 784, 959, 1140, 
-	1328, 1525, 1730, 1945, 2170, 2407, 2656, 2920, 
-	3200, 3498, 3816, 4159, 4528, 4930, 5370, 5856, 
-	6400, 7016, 7728, 8570, 9600, 10928, 12800, 16000};
+// Constants to define which port bits to set
+const uint8_t con_scan_bitsD = 0x7F;
+const uint8_t con_scan_bitsB = 0x0F;
+const uint8_t con_thr_bitsB = 0x30;
+const uint8_t con_wep_bitsB = 0x40;
 
+/*===========================================================================*/
+// Global signals
 
 // Begin left-to-right
-// Declare as static so larson() knows which way to shift the register
-static int ltr = 1;			
+static int scan_ltr = 1;			
 
-volatile uint8_t led;
+// Current lit LED - intialised to the middle LED
+static uint8_t scan_led = con_scan_LED_mid;
+
+// Strings to contain scanner and thruster LED on/off commands
+volatile uint16_t scan_string = 0x0000;
+volatile uint8_t thr_string = 0x00;
+
+// Counter
 volatile uint8_t i = 0;
-uint8_t j = 0;
+
 /*===========================================================================*/
 
 
 int main(void) {
 
-	// Enable gloabl interrupts
+	// Enable global interrupts
 	sei();
 	
-	// Enable timer0 interrupts
-	//		  compare A   |	  compare B   |	  overflow
-	TIMSK = (1 << OCIE0A) | (1 << OCIE0B) | (1 << TOIE0);
+	// Enable timer interrupts
+	//        t0 compA    |   t0 compB    |  t0 overflow |   t1 compA    |   t1 compB
+	TIMSK = (1 << OCIE0A) | (1 << OCIE0B) | (1 << TOIE0) | (1 << OCIE1A) | (1 << OCIE1B);
 	
 	/*-----------------------------------------------------------------------*/
 
-	// Initialise PortD as output
+	// Initialise PORTB and PORTD as outputs
+	DDRB = 0xFF;
 	DDRD = 0xFF;
-	led = 0x08;
-	//PORTD = led;
+	
 	/*-----------------------------------------------------------------------*/
 
-	// Setup timer0
-	//	            64x prescale
+	// Setup timer0 to overflow at approx 60Hz (8bit timer / 64 = 16320 ticks)
+	//              /64 prescale
 	TCCR0B |= (1 << CS01) | (1 << CS00);
 	
 
@@ -73,79 +99,84 @@ int main(void) {
 	// Main loop
 	while(1) {
 		
-	}	
+		// Update the output port(s) to light the LEDs as demanded
+		PORTD = scan_string & con_scan_bitsD;			// 7 eye LEDs (scan_string bits 0..6)
 		
+		PORTB = (scan_string >> 7) & con_scan_bitsB;	// 4 eye LEDs (scan_string bits 7..10)
+		PORTB |= (thr_string << 4) & con_thr_bitsB;		// 2 thruster LEDs (thr_string bits 0..1)
+		PORTB |= con_wep_bitsB;							// Weapons bay LEDs at constant brightness
+	}	
+	
+	return 1;
 }
 
 /*===========================================================================*/
 
-// timer0 PWM on for all three LEDs on overflow
+// timer0 overflow interrupt
+// Switch ON all 3 scanner LEDs
 ISR(TIMER0_OVF_vect) {
-
-	
 
 	if (OCR0B<241) {
 		OCR0A++;
 		OCR0B = OCR0B + 15;
 	}
 	else {
-		// Enable timer0 interrupts
-		//		  compare A   |	  compare B   |	  overflow
-		TIMSK = (1 << OCIE0A) | (0 << OCIE0B) | (1 << TOIE0);
+		// Disable timer0 compare B interrupt once at full brightness
+		TIMSK &= ~(1 << OCIE0B);
 		i++;
 	}
 
 
 	if (i>=5) {
-		// Update the PORTD register to shift the lit LED
+		// Call larson() to shift the lit LED demand
 		larson();
-		//PORTD = led;
 		i=0;
 	}
-	PORTD |= (led<<1) | led | (led>>1);		// LEDs on
-
+	
+	scan_string |= (scan_led<<1) | scan_led | (scan_led>>1);
+	
 }
 
 /*===========================================================================*/
 
-// timer0 PWM off for outer LEDs
+// timer0 compare A interrupt
+// PWM off for outer LEDs
 ISR(TIMER0_COMPA_vect) {
-
-	PORTD &= ~((led<<1) | (led>>1));		// Outer LEDs off
+	scan_string &= ~((scan_led<<1) | (scan_led>>1));
 }
 
 /*===========================================================================*/
 
-// timer0 PWM off for inner LED (disabled after startup)
+// timer0 compare B interrupt
+// PWM off for inner LED (disabled after startup)
 ISR(TIMER0_COMPB_vect) {
-
-	PORTD &= ~led;						// Mid LED off
+	scan_string &= ~scan_led;
 }
 
 /*===========================================================================*/
 
-
+// Shifts the current lit LED left/right between the defined limits 
+// con_scan_LED_first and con_scan_LED_last
 int larson(void) {
-// TODO - rewrite this to shift a PWM pattern - use sine wave?
 
-	if (ltr==1) 						// Scan left to right
-	{
-		if (led<64) {
-			led = (led << 1);			// Left-shift to light next LED
+	if (scan_ltr==1) {							// Scan left to right
+		if (scan_led < con_scan_LED_last) {
+			scan_led = (scan_led << 1);			// Left-shift to light next LED
 		}
-		else {				 		// Right-most position		
-			ltr = 0;				// Set the direction to right-to-left
+		else {				 					// Right-most position		
+			scan_ltr = 0;						// Set the direction to right-to-left
 		}
 	}
-	else {							// Scan right to left 
-		if (led>1) {
-			led = (led >> 1);			// Right-shift to light next LED
+	else {										// Scan right to left 
+		if (scan_led > con_scan_LED_first) {
+			scan_led = (scan_led >> 1);			// Right-shift to light next LED
 		}
-		else {						// Left-most position
-			ltr = 1;				// Set the direction to left-to-right
+		else {									// Left-most position
+			scan_ltr = 1;						// Set the direction to left-to-right
 		}
 	}
 
 	return 1;
 
 }
+
