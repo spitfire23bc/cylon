@@ -22,9 +22,7 @@
  *             0V  10 --|      |-- 11  scan LED7
  *                       ------
  *
- *	TODO - increase LED count to 11(?) on breadboard - use PORTB
  *	TODO - add flickering thrusters
- *	TODO - add static weapons bay LEDs to breadboard
  *	TODO - tidy up interrupt code and fade-in
  *
  */
@@ -36,7 +34,7 @@
 
 /*===========================================================================*/
 // Type defs
-typedef enum { false, true } bool;
+typedef enum { false, true } bool_t;
 
 /*===========================================================================*/
 // Prototypes
@@ -51,6 +49,9 @@ const uint16_t con_scan_LED_first = (1 << 0);
 const uint16_t con_scan_LED_mid = (1 << 5);
 const uint16_t con_scan_LED_last = (1 << 10);
 
+const uint8_t con_thr_1 = 0x01;
+const uint8_t con_thr_2 = 0x02;
+
 // Constants to define which port bits to set
 const uint8_t con_scan_bitsD = 0x7F;
 const uint8_t con_scan_bitsB = 0x0F;
@@ -61,18 +62,21 @@ const uint8_t con_wep_bitsB = 0x80;
 // Global signals
 
 // Begin left-to-right
-static bool scan_ltr = true;			
+static bool_t scan_ltr = true;			
 
 // Current lit LED - intialised to the middle LED
 static uint16_t scan_led = 0x00;
 
 // Strings to contain scanner and thruster LED on/off commands
 volatile uint16_t scan_string = 0x0000;
-volatile uint8_t thr_string = 0x03;
+volatile uint8_t thr_string = 0x00;
 uint8_t portb_string = 0x00;
 
-// Counter
+// Counters
 volatile uint8_t i = 0;
+volatile uint8_t j = 0;
+volatile uint8_t k = 0;
+
 
 /*===========================================================================*/
 
@@ -86,6 +90,9 @@ int main(void) {
 	//        t0 compA    |   t0 compB    |  t0 overflow |   t1 compA    |   t1 compB
 	TIMSK = (1 << OCIE0A) | (1 << OCIE0B) | (1 << TOIE0) | (1 << OCIE1A) | (1 << OCIE1B);
 	
+	OCR1A = 500;
+	OCR1B = 50000;
+	
 	/*-----------------------------------------------------------------------*/
 
 	// Initialise PORTB and PORTD as outputs
@@ -98,7 +105,9 @@ int main(void) {
 	//              /64 prescale
 	TCCR0B |= (1 << CS01) | (1 << CS00);
 	
-
+	// Setup timer1 with no prescaling
+	TCCR1B |= (1 << CS10);
+	
 	/*-----------------------------------------------------------------------*/
 
 	// Main loop
@@ -121,28 +130,45 @@ int main(void) {
 /*===========================================================================*/
 
 // timer0 overflow interrupt
-// Switch ON all 3 scanner LEDs
 ISR(TIMER0_OVF_vect) {
 
-	if (OCR0B<241) {
-		OCR0A++;
-		OCR0B = OCR0B + 15;
+	// Reset timer1 (16 bit timer) at ~60Hz
+	TCNT1 = 0;
+	// Switch on thruster LEDs
+	thr_string = con_thr_1 | con_thr_2;
+
+	// Scanner fade-in
+	if (OCR0B<245) {
+		if (j >= 3) {
+			OCR0A++;
+			OCR0B = OCR0B + 10;
+			j=0;
+		}
+		else {
+			j++;
+		}
 	}
 	else {
 		// Disable timer0 compare B interrupt once at full brightness
 		TIMSK &= ~(1 << OCIE0B);
-		i++;
+		
+		if (k >= 63) {
+			i++;
+		}
+		else {
+			k++;
+		}
+		
 	}
 
 
-	if (i>=5) {
+	if (i>=4) {
 		// Call larson() to shift the lit LED demand
 		larson();
 		i=0;
 	}
 	
 	scan_string |= (scan_led<<1) | scan_led | (scan_led>>1);
-	
 }
 
 /*===========================================================================*/
@@ -159,6 +185,22 @@ ISR(TIMER0_COMPA_vect) {
 // PWM off for inner LED (disabled after startup)
 ISR(TIMER0_COMPB_vect) {
 	scan_string &= ~scan_led;
+}
+
+/*===========================================================================*/
+
+// timer1 compare A interrupt
+// 
+ISR(TIMER1_COMPA_vect) {
+	thr_string &= ~con_thr_1;
+}
+
+/*===========================================================================*/
+
+// timer1 compare B interrupt
+// 
+ISR(TIMER1_COMPB_vect) {
+	thr_string &= ~con_thr_2;
 }
 
 /*===========================================================================*/
