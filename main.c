@@ -58,6 +58,9 @@ const uint8_t con_scan_bitsB = 0x0F;
 const uint8_t con_thr_bitsB = 0x30;
 const uint8_t con_wep_bitsB = 0x80;
 
+const uint16_t thr_array1[16] = {13000, 10000, 7000, 15000, 12000, 9000, 11000, 12000, 13000, 12000, 15000, 11000, 7000, 14000, 8000, 11000};
+const uint16_t thr_array2[16] = {13001, 10000, 7000, 15000, 12000, 9000, 11000, 12000, 13000, 12000, 15000, 11000, 7000, 14000, 8000, 11000};
+
 /*===========================================================================*/
 // Global signals
 
@@ -76,6 +79,8 @@ uint8_t portb_string = 0x00;
 volatile uint8_t i = 0;
 volatile uint8_t j = 0;
 volatile uint8_t k = 0;
+volatile uint8_t l = 0;
+volatile uint8_t m = 0;
 
 
 /*===========================================================================*/
@@ -91,7 +96,7 @@ int main(void) {
 	TIMSK = (1 << OCIE0A) | (1 << OCIE0B) | (1 << TOIE0) | (1 << OCIE1A) | (1 << OCIE1B);
 	
 	OCR1A = 500;
-	OCR1B = 50000;
+	OCR1B = 500;
 	
 	/*-----------------------------------------------------------------------*/
 
@@ -129,19 +134,20 @@ int main(void) {
 
 /*===========================================================================*/
 
-// timer0 overflow interrupt
+// timer0 overflow interrupt - occurs at ~60Hz
 ISR(TIMER0_OVF_vect) {
 
-	// Reset timer1 (16 bit timer) at ~60Hz
+	// Reset timer1 (16 bit timer)
 	TCNT1 = 0;
 	// Switch on thruster LEDs
 	thr_string = con_thr_1 | con_thr_2;
+
 
 	// Scanner fade-in
 	if (OCR0B<245) {
 		if (j >= 3) {
 			OCR0A++;
-			OCR0B = OCR0B + 10;
+			OCR0B += 10;
 			j=0;
 		}
 		else {
@@ -193,6 +199,14 @@ ISR(TIMER0_COMPB_vect) {
 // 
 ISR(TIMER1_COMPA_vect) {
 	thr_string &= ~con_thr_1;
+
+	if (l<15) {
+		l++;
+	}
+	else {
+		l=0;
+	}		
+	OCR1B += thr_array1[l];
 }
 
 /*===========================================================================*/
@@ -201,6 +215,14 @@ ISR(TIMER1_COMPA_vect) {
 // 
 ISR(TIMER1_COMPB_vect) {
 	thr_string &= ~con_thr_2;
+	
+	if (m>0) {
+		m--;
+	}
+	else {
+		m=15;
+	}
+	OCR1A += thr_array2[m];
 }
 
 /*===========================================================================*/
