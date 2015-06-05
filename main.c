@@ -58,8 +58,8 @@ const uint8_t con_scan_bitsB = 0x0F;
 const uint8_t con_thr_bitsB = 0x30;
 const uint8_t con_wep_bitsB = 0x80;
 
-const uint16_t thr_array1[16] = {13000, 10000, 7000, 15000, 12000, 9000, 11000, 12000, 13000, 12000, 15000, 11000, 7000, 14000, 8000, 11000};
-const uint16_t thr_array2[16] = {13001, 10000, 7000, 15000, 12000, 9000, 11000, 12000, 13000, 12000, 15000, 11000, 7000, 14000, 8000, 11000};
+const uint16_t thr_array1[16] = {8000, 8000, 7000, 7000, 6000, 6000, 5000, 5000, 6000, 6000, 7000, 7000, 8000, 8000, 9000, 9000};
+const uint16_t thr_array2[16] = {6000, 6000, 7000, 7000, 8000, 8000, 9000, 9000, 8000, 8000, 7000, 7000, 6000, 6000, 5000, 5000};
 
 /*===========================================================================*/
 // Global signals
@@ -141,6 +141,23 @@ ISR(TIMER0_OVF_vect) {
 	TCNT1 = 0;
 	// Switch on thruster LEDs
 	thr_string = con_thr_1 | con_thr_2;
+	
+	if (l<15) {
+		l++;
+	}
+	else {
+		l=0;
+	}		
+	OCR1A = thr_array1[l];
+	
+	if (m>0) {
+		m--;
+	}
+	else {
+		m=15;
+	}
+	OCR1B = thr_array2[m];	
+
 
 
 	// Scanner fade-in
@@ -168,7 +185,7 @@ ISR(TIMER0_OVF_vect) {
 	}
 
 
-	if (i>=4) {
+	if (i>=6) {
 		// Call larson() to shift the lit LED demand
 		larson();
 		i=0;
@@ -199,14 +216,6 @@ ISR(TIMER0_COMPB_vect) {
 // 
 ISR(TIMER1_COMPA_vect) {
 	thr_string &= ~con_thr_1;
-
-	if (l<15) {
-		l++;
-	}
-	else {
-		l=0;
-	}		
-	OCR1B += thr_array1[l];
 }
 
 /*===========================================================================*/
@@ -215,14 +224,6 @@ ISR(TIMER1_COMPA_vect) {
 // 
 ISR(TIMER1_COMPB_vect) {
 	thr_string &= ~con_thr_2;
-	
-	if (m>0) {
-		m--;
-	}
-	else {
-		m=15;
-	}
-	OCR1A += thr_array2[m];
 }
 
 /*===========================================================================*/
